@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Checkout Shield Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Instrument+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: travel-ticket storefront on the left, live "defence console" on the right so a manager can watch every bot check fire. */
+:root{
+  --bg:#f3f6f5; --surface:#ffffff; --surface-2:#eaf0ee; --ink:#0f2a2a; --ink-2:#3d5554; --muted:#6c8280;
+  --line:#d5e0dd; --accent:#0d6b63; --accent-ink:#ffffff; --accent-soft:#d8eeea; --signal:#e08a12; --signal-soft:#fdf0dc;
+  --good:#1d7a45; --good-soft:#dcf2e4; --warn:#b26a00; --warn-soft:#fdf0dc; --bad:#b4282e; --bad-soft:#fbe3e3;
+  --console:#0f2322; --console-ink:#cfe3df; --console-dim:#7f9a96;
+  --f-display:"Unbounded", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Instrument Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono:"DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0c1716; --surface:#13201f; --surface-2:#1a2b29; --ink:#e3efec; --ink-2:#b5c9c5; --muted:#86a09c;
+  --line:#26403d; --accent:#3fb7a9; --accent-ink:#062220; --accent-soft:#163a36; --signal:#f0a742; --signal-soft:#3a2a12;
+  --good:#5fcf8c; --good-soft:#163525; --warn:#f0b357; --warn-soft:#3a2a12; --bad:#ff8a8f; --bad-soft:#3d1a1c;
+  --console:#081110; --console-ink:#cfe3df; --console-dim:#6f8a86; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c1716; --surface:#13201f; --surface-2:#1a2b29; --ink:#e3efec; --ink-2:#b5c9c5; --muted:#86a09c;
+  --line:#26403d; --accent:#3fb7a9; --accent-ink:#062220; --accent-soft:#163a36; --signal:#f0a742; --signal-soft:#3a2a12;
+  --good:#5fcf8c; --good-soft:#163525; --warn:#f0b357; --warn-soft:#3a2a12; --bad:#ff8a8f; --bad-soft:#3d1a1c;
+  --console:#081110; --console-ink:#cfe3df; --console-dim:#6f8a86; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);padding-inline:16px;padding-block:0 48px}
+h1,h2,h3{text-wrap:balance;margin:0}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--signal);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1240px;margin:0 auto}
+
+/* top bar */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:18px;border-bottom:1px solid var(--line)}
+.logo{font-family:var(--f-display);font-weight:700;font-size:18px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.logo i{width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink);font-style:normal;font-size:13px}
+.demo-tag{font:500 11px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--signal);background:var(--signal-soft);padding:6px 9px;border-radius:999px}
+.steps{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.step{font:500 12px/1 var(--f-mono);padding:7px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.step.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.step.done{color:var(--good);border-color:var(--good)}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px;margin-top:24px;align-items:start}
+@media (max-width:980px){.layout{grid-template-columns:1fr}}
+.main{min-width:0}
+
+/* intro */
+.intro{display:grid;gap:8px;margin-bottom:22px}
+.intro h1{font-family:var(--f-display);font-weight:500;font-size:clamp(24px,3.4vw,34px);letter-spacing:-.02em;line-height:1.15}
+.intro p{color:var(--ink-2);max-width:62ch;margin:0}
+
+/* plans as tickets */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.ticket{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);display:grid;grid-template-rows:auto auto 1fr;overflow:hidden;min-width:0}
+.t-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:16px 16px 12px}
+.t-code{font:500 26px/1 var(--f-mono);letter-spacing:.04em}
+.t-name{font-weight:600}
+.t-net{font-size:12px;color:var(--muted)}
+.perf{height:0;border-top:2px dashed var(--line);margin:0 12px;position:relative}
+.perf::before,.perf::after{content:"";position:absolute;top:-9px;width:16px;height:16px;border-radius:50%;background:var(--bg);border:1px solid var(--line)}
+.perf::before{left:-21px}.perf::after{right:-21px}
+.t-plans{display:grid;gap:6px;padding:12px 16px 16px;align-content:start}
+.plan{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);text-align:left}
+.plan:hover{border-color:var(--accent);background:var(--accent-soft)}
+.plan b{font-weight:600}
+.plan small{color:var(--muted);font-size:12px;display:block}
+.plan .price{font:500 15px/1 var(--f-mono)}
+
+/* cart */
+.plan.added{border-color:var(--accent);background:var(--accent-soft)}
+.plan .add{font:600 12px/1 var(--f-body);color:var(--accent);display:block;margin-top:4px}
+.cartbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:5;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;
+  background:var(--ink);color:var(--bg);border-radius:12px;padding:12px 14px 12px 18px;margin-bottom:18px}
+.cartbar[hidden]{display:none!important}
+.cartbar b{font:500 15px/1 var(--f-mono)}
+.cartbar .btn{background:var(--signal);color:#1d1203}
+.cartbar .btn.ghost{background:transparent;color:var(--bg);border-color:#ffffff40}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;z-index:20;box-shadow:0 8px 24px #0004}
+.cart{display:grid;gap:16px}
+.cart h1{font-family:var(--f-display);font-weight:500;font-size:clamp(22px,3vw,28px)}
+.lines{display:grid;gap:10px}
+.line{display:grid;grid-template-columns:56px minmax(0,1fr) auto auto auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+@media (max-width:620px){.line{grid-template-columns:44px minmax(0,1fr) auto;}.line .lt{grid-column:2/3}.line .rm{grid-column:3/4}}
+.line .t-code{font-size:20px}
+.qty{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.qty button{border:0;background:var(--surface-2);width:34px;height:34px;font-weight:700}
+.qty span{min-width:34px;text-align:center;font:500 14px var(--f-mono)}
+.lt{font:500 15px var(--f-mono);text-align:right}
+.rm{border:0;background:none;color:var(--bad);font-weight:600;padding:6px}
+.totals{display:grid;gap:6px;justify-items:end;background:var(--surface-2);border-radius:12px;padding:14px 16px}
+.totals .grand{font:500 22px var(--f-mono)}
+.empty{padding:28px;text-align:center;background:var(--surface);border:1px dashed var(--line);border-radius:12px;color:var(--ink-2)}
+.sumlines{display:grid;gap:4px;font-size:14px}
+.sumlines div{display:flex;justify-content:space-between;gap:12px}
+
+/* checkout */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.co{display:grid;gap:18px}
+.summary{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface-2);border-radius:12px}
+.summary .t-code{font-size:20px}
+.back{background:none;border:0;color:var(--accent);font-weight:600;padding:0;justify-self:start}
+.field{display:grid;gap:6px}
+.field label{font-weight:600;font-size:14px}
+.field input{padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);min-width:0;width:100%}
+.field input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:560px){.row2{grid-template-columns:1fr}}
+.btn{border:0;border-radius:10px;padding:13px 18px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:600}
+.btn-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.note{font-size:13px;color:var(--muted)}
+.err{color:var(--bad);font-size:13px;font-weight:600}
+
+/* challenge */
+.ch{border:2px solid var(--accent);border-radius:var(--r);padding:18px;display:grid;gap:14px;background:var(--surface)}
+.ch-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.ch-kicker{font:500 11px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.ch-q{font-size:18px;font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,84px));gap:8px}
+.tiles.six{grid-template-columns:repeat(3,minmax(0,84px))}
+.tile{aspect-ratio:1;max-width:100%;border:2px solid var(--line);border-radius:12px;background:var(--surface-2);font-size:36px;display:grid;place-items:center;line-height:1}
+.tile.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+.tile.num{font:500 26px/1 var(--f-mono)}
+.tile.gone{opacity:.25}
+canvas.cap{border:1px solid var(--line);border-radius:10px;max-width:100%;background:var(--surface-2)}
+.ans{padding:11px 14px;border:1px solid var(--line);border-radius:10px;width:200px;max-width:100%;background:var(--surface);font:500 18px var(--f-mono)}
+.track{position:relative;height:56px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);max-width:460px;touch-action:none;user-select:none}
+.zone{position:absolute;top:6px;bottom:6px;border:2px dashed var(--signal);border-radius:10px;background:var(--signal-soft);display:grid;place-items:center;font-size:22px}
+.handle{position:absolute;top:6px;width:44px;height:42px;border-radius:10px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:20px;cursor:grab;border:0}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{padding:10px 16px;border:2px solid var(--line);border-radius:10px;background:var(--surface);font-weight:600}
+.opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+.rot{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.rot svg{width:110px;height:110px;transition:transform .25s;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}
+@media (prefers-reduced-motion:reduce){.rot svg{transition:none}}
+.cool{padding:16px;border-radius:12px;background:var(--bad-soft);color:var(--bad);font-weight:600}
+.ok{padding:24px;border-radius:var(--r);background:var(--good-soft);color:var(--good);display:grid;gap:8px}
+.ok h2{font-family:var(--f-display);font-weight:500;font-size:22px}
+.blocked{padding:24px;border-radius:var(--r);background:var(--bad-soft);color:var(--bad);display:grid;gap:8px}
+.blocked h2{font-family:var(--f-display);font-weight:500;font-size:22px}
+
+/* console */
+.side{display:grid;gap:16px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:980px){.side{position:static}}
+.console{background:var(--console);color:var(--console-ink);border-radius:var(--r);padding:16px;display:grid;gap:12px;min-width:0}
+.console h3{font:500 11px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--console-dim)}
+.meter{display:grid;gap:6px}
+.meter-top{display:flex;justify-content:space-between;align-items:baseline}
+.score{font:500 30px/1 var(--f-mono)}
+.verdict{font:500 12px/1 var(--f-mono);padding:6px 9px;border-radius:999px;background:#ffffff1a}
+.bar{height:8px;border-radius:999px;background:#ffffff1a;overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:999px;background:var(--good);transition:width .3s}
+.sigs{display:grid;gap:6px;font:400 12.5px/1.35 var(--f-mono)}
+.sig{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:start}
+.sig .v{color:var(--console-dim)}
+.log{font:400 12px/1.5 var(--f-mono);max-height:220px;overflow:auto;display:grid;gap:2px;padding-right:4px}
+.log div{color:var(--console-dim)}
+.log b{font-weight:500;color:var(--console-ink)}
+.sim{display:flex;flex-wrap:wrap;gap:8px}
+.sim button{background:#ffffff14;color:var(--console-ink);border:1px solid #ffffff2a;border-radius:9px;padding:9px 12px;font:500 12.5px var(--f-mono)}
+.sim button:hover{background:#ffffff26}
+.settings{display:grid;gap:10px}
+.settings h3{font:500 11px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px}
+.chk input{width:16px;height:16px;accent-color:var(--accent)}
+.settings select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+
+/* production plan */
+.plan-note{margin-top:28px;display:grid;gap:14px}
+.plan-note h2{font-family:var(--f-display);font-weight:500;font-size:20px}
+.layers{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.layer{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:4px;min-width:0}
+.layer b{font-size:14px}
+.layer span{font-size:13px;color:var(--ink-2)}
+.layer em{font:500 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;font-style:normal;color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo"><i>eS</i>eSIM Store</div>
+    <span class="demo-tag">Prototype · no real payments</span>
+    <nav class="steps" aria-label="Checkout progress">
+      <span class="step on" id="s1">1 · Plans</span>
+      <span class="step" id="s5">2 · Cart</span>
+      <span class="step" id="s2">3 · Details</span>
+      <span class="step" id="s3">4 · Verify</span>
+      <span class="step" id="s4">5 · Pay</span>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <main class="main" id="main"></main>
+
+    <aside class="side" aria-label="Defence console">
+      <section class="console" aria-live="polite">
+        <h3>Defence console · live</h3>
+        <div class="meter">
+          <div class="meter-top"><span class="score" id="score">0</span><span class="verdict" id="verdict">Watching</span></div>
+          <div class="bar"><i id="bar"></i></div>
+        </div>
+        <div class="sigs" id="sigs"></div>
+        <h3>Simulate an attack</h3>
+        <div class="sim">
+          <button id="simSimple" type="button">▶ Simple bot</button>
+          <button id="simSmart" type="button">▶ Smarter bot</button>
+          <button id="simReset" type="button">↺ Reset</button>
+        </div>
+        <h3>Event log</h3>
+        <div class="log" id="log"></div>
+      </section>
+
+      <section class="card settings" aria-label="Challenge settings">
+        <h3>Challenge settings (admin)</h3>
+        <div class="cols2" id="chTypes"></div>
+        <label class="chk" for="setRotate"><input type="checkbox" id="setRotate" checked> Never repeat the last challenge</label>
+        <label class="chk" for="setAlways"><input type="checkbox" id="setAlways" checked> Challenge every checkout (even low risk)</label>
+        <label class="chk" for="setMed">Medium risk gets
+          <select id="setMed"><option value="1">1 challenge</option><option value="2" selected>2 challenges</option><option value="3">3 challenges</option></select>
+        </label>
+        <span class="note">Untick a type to take it out of rotation. Changes apply to the next challenge.</span>
+      </section>
+    </aside>
+  </div>
+
+  <section class="plan-note" aria-labelledby="pn">
+    <h2 id="pn">How this stops bots in production</h2>
+    <div class="layers">
+      <div class="layer"><em>Layer 1 · invisible</em><b>Silent signals</b><span>Hidden honeypot field, time on page, mouse / touch activity, typing, automation flags and repeat attempts give every checkout a risk score.</span></div>
+      <div class="layer"><em>Layer 2 · visible</em><b>Rotating human checks</b><span>8 quick puzzles picked at random, so a bot can't learn one pattern. Higher risk means more puzzles. 3 failures lock checkout for a while.</span></div>
+      <div class="layer"><em>Layer 3 · server</em><b>Server-side verification</b><span>In the live build, puzzles and answers are created and checked on our server with a one-time token, so the answer is never in the page.</span></div>
+      <div class="layer"><em>Layer 4 · payment</em><b>Stripe Radar + 3D Secure</b><span>Velocity rules (cards / emails per IP), block highest risk, 3D Secure on elevated risk. Delay eSIM delivery for flagged orders.</span></div>
+      <div class="layer"><em>Layer 5 · edge</em><b>Rate limits</b><span>Cloudflare limits on checkout and payment calls per IP and device stop bursts before they reach our site.</span></div>
+    </div>
+    <p class="note">This page is a clickable prototype. The checks run in the browser so they can be shown live; the production version moves scoring and puzzle checks to the server.</p>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const rnd = n => Math.floor(Math.random() * n);
+const pick = a => a[rnd(a.length)];
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ---------------- catalogue ---------------- */
+const COUNTRIES = [
+  { code: 'TH', name: 'Thailand', net: 'AIS · TrueMove H', plans: [['1 GB', 7, 4.5], ['5 GB', 15, 9.9], ['10 GB', 30, 15.9]] },
+  { code: 'JP', name: 'Japan', net: 'SoftBank · KDDI', plans: [['1 GB', 7, 5.5], ['5 GB', 15, 12.0], ['20 GB', 30, 26.0]] },
+  { code: 'US', name: 'United States', net: 'T-Mobile · AT&T', plans: [['3 GB', 7, 8.0], ['10 GB', 30, 19.0], ['Unlimited', 7, 24.0]] },
+  { code: 'GB', name: 'United Kingdom', net: 'EE · Vodafone', plans: [['2 GB', 7, 4.9], ['10 GB', 30, 12.9], ['25 GB', 30, 19.9]] },
+  { code: 'TR', name: 'Turkey', net: 'Turkcell', plans: [['3 GB', 7, 6.5], ['10 GB', 30, 16.0], ['20 GB', 30, 24.0]] },
+  { code: 'AE', name: 'UAE', net: 'du · Etisalat', plans: [['1 GB', 7, 6.0], ['5 GB', 15, 18.0], ['10 GB', 30, 29.0]] },
+  { code: 'EU', name: 'Europe · 39 countries', net: 'Multi-network', plans: [['5 GB', 15, 11.0], ['10 GB', 30, 18.0], ['20 GB', 30, 29.0]] },
+  { code: 'GL', name: 'Global · 120+ countries', net: 'Multi-network', plans: [['3 GB', 15, 19.0], ['10 GB', 30, 45.0], ['20 GB', 60, 79.0]] }
+];
+
+/* ---------------- state ---------------- */
+const S = {
+  view: 'home', country: null, plan: null, cart: [],
+  coOpenedAt: 0, pointerMoves: 0, keys: 0, pasted: false, attempts: [],
+  fails: 0, coolUntil: 0, queue: [], qIndex: 0, lastType: null, current: null,
+  risk: 0, signals: [], simulated: null
+};
+
+/* ---------------- console ---------------- */
+function log(msg, strong) {
+  const d = document.createElement('div');
+  const t = new Date().toLocaleTimeString([], { hour12: false });
+  d.innerHTML = `${t} ${strong ? '<b>' + esc(msg) + '</b>' : esc(msg)}`;
+  const box = $('log'); box.prepend(d);
+}
+function setStep(n) {
+  // n: 1 plans, 2 cart, 3 details, 4 verify, 5 pay
+  ['s1', 's5', 's2', 's3', 's4'].forEach((id, i) => {
+    const el = $(id); el.classList.toggle('on', i + 1 === n); el.classList.toggle('done', i + 1 < n);
+  });
+}
+function paintRisk(score, label) {
+  $('score').textContent = score;
+  $('verdict').textContent = label;
+  const bar = $('bar'); bar.style.width = Math.min(100, score) + '%';
+  bar.style.background = score >= 80 ? 'var(--bad)' : score >= 35 ? 'var(--signal)' : 'var(--good)';
+}
+function paintSignals(list) {
+  $('sigs').innerHTML = list.map(s =>
+    `<div class="sig"><span>${s.flag ? '⚠' : '✓'}</span><span>${esc(s.name)}<br><span class="v">${esc(s.detail)}</span></span><span>${s.points ? '+' + s.points : ''}</span></div>`
+  ).join('');
+}
+
+/* ---------------- live passive signals ---------------- */
+document.addEventListener('pointermove', () => { if (S.view === 'checkout') S.pointerMoves++; }, { passive: true });
+document.addEventListener('touchstart', () => { if (S.view === 'checkout') S.pointerMoves += 5; }, { passive: true });
+
+function computeRisk(sim) {
+  const hpVal = ($('hp') && $('hp').value) || '';
+  const secs = (Date.now() - S.coOpenedAt) / 1000;
+  const moves = sim ? 0 : S.pointerMoves;
+  const keys = sim ? 0 : S.keys;
+  const now = Date.now();
+  S.attempts = S.attempts.filter(t => now - t < 10 * 60 * 1000);
+  const webdriver = !!navigator.webdriver;
+  const sig = [];
+  const add = (name, flag, points, detail) => sig.push({ name, flag, points: flag ? points : 0, detail });
+  add('Hidden honeypot field', !!hpVal, 100, hpVal ? 'filled in — only bots see it' : 'empty');
+  add('Browser automation flag', webdriver, 100, webdriver ? 'navigator.webdriver = true' : 'not detected');
+  add('Time on checkout', secs < 3, 40, secs.toFixed(1) + 's' + (secs < 3 ? ' — faster than a person can type' : ''));
+  if (secs >= 3 && secs < 8) add('Time on checkout (quick)', true, 15, 'under 8s');
+  add('Mouse / touch activity', moves < 5, 25, moves + ' movements');
+  add('Typing in the form', keys === 0, 10, keys ? keys + ' keystrokes' : 'no keystrokes (pasted or scripted)');
+  add('Attempts in 10 min', S.attempts.length > 3, 30, S.attempts.length + ' so far');
+  add('Cart size', cartCount() > 6, 15, cartCount() + ' eSIMs' + (cartCount() > 6 ? ' — bulk order' : ''));
+  const score = sig.reduce((t, s) => t + s.points, 0);
+  return { score, sig };
+}
+
+/* ---------------- cart ---------------- */
+const MAX_QTY = 5;
+const money = n => '$' + n.toFixed(2);
+const cartCount = () => S.cart.reduce((t, l) => t + l.qty, 0);
+const cartTotal = () => S.cart.reduce((t, l) => t + l.qty * COUNTRIES[l.ci].plans[l.pi][2], 0);
+const lineName = l => { const c = COUNTRIES[l.ci], p = c.plans[l.pi]; return `${c.name} · ${p[0]} · ${p[1]} days`; };
+function addToCart(ci, pi) {
+  const l = S.cart.find(x => x.ci === ci && x.pi === pi);
+  if (l) { if (l.qty >= MAX_QTY) { toast(`Max ${MAX_QTY} of the same plan per order`); return; } l.qty++; }
+  else S.cart.push({ ci, pi, qty: 1 });
+  toast(`Added ${COUNTRIES[ci].name} ${COUNTRIES[ci].plans[pi][0]} to cart`);
+  log(`Cart: + ${COUNTRIES[ci].code} ${COUNTRIES[ci].plans[pi][0]} (${cartCount()} items)`);
+  paintCartBar();
+}
+let toastT;
+function toast(msg) {
+  let t = document.querySelector('.toast');
+  if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 1800);
+}
+function paintCartBar() {
+  const bar = $('cartbar'); if (!bar) return;
+  const n = cartCount();
+  bar.hidden = n === 0;
+  bar.querySelector('#cbN').textContent = `${n} plan${n === 1 ? '' : 's'} in cart`;
+  bar.querySelector('#cbT').textContent = money(cartTotal());
+  document.querySelectorAll('.plan').forEach(b => {
+    const l = S.cart.find(x => x.ci === +b.dataset.c && x.pi === +b.dataset.p);
+    b.classList.toggle('added', !!l);
+    b.querySelector('.add').textContent = l ? `In cart × ${l.qty} · add another` : '+ Add to cart';
+  });
+}
+function cartView() {
+  S.view = 'cart'; setStep(2);
+  const lines = S.cart;
+  $('main').innerHTML = `
+    <div class="cart">
+      <button class="back" type="button" id="back">← Keep shopping</button>
+      <h1>Your cart</h1>
+      ${lines.length ? `<div class="lines">${lines.map((l, i) => {
+        const c = COUNTRIES[l.ci], p = c.plans[l.pi];
+        return `<div class="line">
+          <div class="t-code">${c.code}</div>
+          <div style="min-width:0"><div class="t-name">${esc(c.name)}</div><div class="t-net">${p[0]} · ${p[1]} days · ${money(p[2])} each</div></div>
+          <div class="qty" role="group" aria-label="Quantity"><button type="button" data-i="${i}" data-d="-1" aria-label="One less">−</button><span>${l.qty}</span><button type="button" data-i="${i}" data-d="1" aria-label="One more">+</button></div>
+          <div class="lt">${money(l.qty * p[2])}</div>
+          <button class="rm" type="button" data-rm="${i}">Remove</button>
+        </div>`; }).join('')}</div>
+        <div class="totals"><span class="note">${cartCount()} eSIM${cartCount() === 1 ? '' : 's'} · each gets its own QR code by email</span><span class="grand">Total ${money(cartTotal())}</span>
+          <div class="btn-row"><button class="btn ghost" type="button" id="more">Add more plans</button><button class="btn" type="button" id="buy">Buy now · ${money(cartTotal())}</button></div></div>`
+      : `<div class="empty">Your cart is empty. Pick a destination to add a plan.<div class="btn-row" style="justify-content:center;margin-top:12px"><button class="btn" type="button" id="more">Browse plans</button></div></div>`}
+    </div>`;
+  $('back').onclick = home;
+  $('more').onclick = home;
+  if ($('buy')) $('buy').onclick = checkout;
+  $('main').querySelectorAll('.qty button').forEach(b => b.onclick = () => {
+    const l = S.cart[+b.dataset.i];
+    l.qty = Math.max(0, Math.min(MAX_QTY, l.qty + +b.dataset.d));
+    if (l.qty === MAX_QTY && +b.dataset.d > 0) toast(`Max ${MAX_QTY} of the same plan per order`);
+    S.cart = S.cart.filter(x => x.qty > 0);
+    cartView();
+  });
+  $('main').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { S.cart.splice(+b.dataset.rm, 1); cartView(); });
+}
+
+/* ---------------- views ---------------- */
+function home() {
+  S.view = 'home'; setStep(1);
+  $('main').innerHTML = `
+    <div class="intro">
+      <h1>Stay connected in 190+ destinations</h1>
+      <p>Add plans to your cart, then buy. The panel on the right shows each bot check as it runs.</p>
+    </div>
+    <div class="cartbar" id="cartbar" hidden>
+      <span><span id="cbN"></span> · <b id="cbT"></b></span>
+      <div class="btn-row"><button class="btn ghost" type="button" id="cbView">View cart</button><button class="btn" type="button" id="cbBuy">Buy now</button></div>
+    </div>
+    <div class="grid">${COUNTRIES.map((c, ci) => `
+      <article class="ticket">
+        <div class="t-head"><div><div class="t-name">${esc(c.name)}</div><div class="t-net">${esc(c.net)}</div></div><div class="t-code">${c.code}</div></div>
+        <div class="perf" aria-hidden="true"></div>
+        <div class="t-plans">${c.plans.map((p, pi) => `
+          <button class="plan" type="button" data-c="${ci}" data-p="${pi}">
+            <span><b>${p[0]}</b><small>${p[1]} days</small><span class="add">+ Add to cart</span></span><span class="price">$${p[2].toFixed(2)}</span>
+          </button>`).join('')}</div>
+      </article>`).join('')}</div>`;
+  $('main').querySelectorAll('.plan').forEach(b => b.onclick = () => addToCart(+b.dataset.c, +b.dataset.p));
+  $('cbView').onclick = cartView;
+  $('cbBuy').onclick = checkout;
+  paintCartBar();
+}
+
+function checkout() {
+  if (!S.cart.length) { cartView(); return; }
+  S.view = 'checkout';
+  S.country = COUNTRIES[S.cart[0].ci]; S.plan = S.country.plans[S.cart[0].pi];
+  S.coOpenedAt = Date.now(); S.pointerMoves = 0; S.keys = 0; S.simulated = null;
+  setStep(3);
+  log(`Checkout opened · ${cartCount()} plan(s) · ${money(cartTotal())}`);
+  $('main').innerHTML = `
+    <div class="co">
+      <button class="back" type="button" id="back">← Back to cart</button>
+      <div class="summary">
+        <div class="sumlines" style="flex:1;min-width:0">${S.cart.map(l => `<div><span>${l.qty} × ${esc(lineName(l))}</span><span>${money(l.qty * COUNTRIES[l.ci].plans[l.pi][2])}</span></div>`).join('')}</div>
+        <div class="t-code">${money(cartTotal())}</div>
+      </div>
+      <form class="card co" id="form" novalidate autocomplete="on">
+        <div class="field"><label for="email">Email for your eSIM QR code</label><input id="email" type="email" placeholder="you@example.com" autocomplete="email" required></div>
+        <div class="row2">
+          <div class="field"><label for="fname">First name</label><input id="fname" type="text" autocomplete="given-name"></div>
+          <div class="field"><label for="device">Phone model</label><input id="device" type="text" placeholder="e.g. iPhone 15"></div>
+        </div>
+        <div class="hp" aria-hidden="true"><label for="hp">Company website</label><input id="hp" type="text" tabindex="-1" autocomplete="off"></div>
+        <div class="btn-row"><button class="btn" type="submit" id="go">Continue to payment</button><span class="err" id="ferr"></span></div>
+        <span class="note">Next you'll answer a quick check, then pay securely. In this prototype no card details are collected.</span>
+      </form>
+      <div id="chArea"></div>
+    </div>`;
+  $('back').onclick = cartView;
+  $('form').addEventListener('keydown', () => S.keys++);
+  $('form').addEventListener('paste', () => { S.pasted = true; });
+  $('form').onsubmit = e => { e.preventDefault(); submitDetails(false); };
+  paintRisk(0, 'Watching');
+  paintSignals([{ name: 'Collecting signals…', flag: false, points: 0, detail: 'move, type, then continue' }]);
+}
+
+function submitDetails(sim) {
+  const email = $('email').value.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $('ferr').textContent = 'Enter a valid email so we can send your eSIM.'; return; }
+  $('ferr').textContent = '';
+  if (Date.now() < S.coolUntil) { cooldown(); return; }
+  S.attempts.push(Date.now());
+  const r = computeRisk(sim);
+  S.risk = r.score;
+  paintSignals(r.sig);
+  r.sig.filter(s => s.flag).forEach(s => log(`Signal: ${s.name} (+${s.points})`));
+  if (r.score >= 80) {
+    paintRisk(r.score, 'Blocked');
+    log(`Risk ${r.score} → checkout blocked`, true);
+    setStep(4);
+    $('chArea').innerHTML = `<div class="blocked" role="alert"><h2>Checkout blocked</h2><span>This request looks automated, so it was stopped before reaching payment. A real customer seeing this in error can contact support.</span></div>`;
+    $('form').querySelectorAll('input,button').forEach(el => el.disabled = true);
+    return;
+  }
+  const medN = +$('setMed').value;
+  const n = r.score >= 35 ? medN : ($('setAlways').checked ? 1 : 0);
+  paintRisk(r.score, r.score >= 35 ? 'Medium risk' : 'Low risk');
+  log(`Risk ${r.score} → ${n} challenge${n === 1 ? '' : 's'}`, true);
+  if (!n) { passed(); return; }
+  $('form').querySelectorAll('input,button').forEach(el => el.disabled = true);
+  S.queue = []; S.qIndex = 0; S.fails = 0;
+  for (let i = 0; i < n; i++) S.queue.push(nextType());
+  setStep(4);
+  showChallenge();
+}
+
+/* ---------------- challenge engine ---------------- */
+function enabledTypes() {
+  return Object.keys(CH).filter(k => { const el = $('ct_' + k); return !el || el.checked; });
+}
+function nextType() {
+  let pool = enabledTypes();
+  if (!pool.length) pool = Object.keys(CH);
+  if ($('setRotate').checked && pool.length > 1) pool = pool.filter(k => k !== S.lastType);
+  const t = pick(pool); S.lastType = t; return t;
+}
+
+function showChallenge() {
+  const type = S.queue[S.qIndex];
+  const ch = CH[type]();
+  S.current = ch;
+  log(`Challenge ${S.qIndex + 1}/${S.queue.length}: ${ch.label}`);
+  $('chArea').innerHTML = `
+    <div class="ch" role="group" aria-labelledby="chq">
+      <div class="ch-top"><span class="ch-kicker">Quick check ${S.qIndex + 1} of ${S.queue.length} · ${esc(ch.label)}</span>
+        <button class="btn ghost" type="button" id="swap">Try a different one</button></div>
+      <div class="ch-q" id="chq">${ch.q}</div>
+      <div id="chBody"></div>
+      <div class="btn-row"><button class="btn" type="button" id="verify">${ch.auto ? 'Check' : 'Verify'}</button><span class="err" id="cherr"></span></div>
+    </div>`;
+  ch.mount($('chBody'));
+  $('verify').onclick = () => verify();
+  $('swap').onclick = () => { S.queue[S.qIndex] = nextType(); log('Customer asked for a different challenge'); showChallenge(); };
+}
+
+function verify(botAnswer) {
+  const ch = S.current;
+  const ok = botAnswer !== undefined ? botAnswer : ch.check();
+  if (ok) {
+    log(`Passed: ${ch.label}`, true);
+    S.qIndex++;
+    if (S.qIndex >= S.queue.length) passed(); else showChallenge();
+    return;
+  }
+  S.fails++;
+  log(`Failed: ${ch.label} (${S.fails}/3)`);
+  if (S.fails >= 3) {
+    S.coolUntil = Date.now() + 20000;
+    log('3 failures → checkout locked for 20s', true);
+    paintRisk(Math.min(100, S.risk + 40), 'Locked');
+    cooldown();
+    return;
+  }
+  S.queue[S.qIndex] = nextType();
+  showChallenge();
+  $('cherr').textContent = 'That wasn’t right. Here’s a different one.';
+}
+
+function cooldown() {
+  const area = $('chArea');
+  const tick = () => {
+    if (!area || !area.isConnected) return;   // customer left checkout
+    const left = Math.ceil((S.coolUntil - Date.now()) / 1000);
+    if (left <= 0) {
+      area.innerHTML = `<div class="card btn-row"><span>You can try again now.</span><button class="btn" type="button" id="retry">Start again</button></div>`;
+      $('retry').onclick = checkout;
+      return;
+    }
+    area.innerHTML = `<div class="cool" role="alert">Too many wrong answers. Checkout is paused for ${left}s to stop automated attempts.</div>`;
+    setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+function passed() {
+  setStep(5);
+  paintRisk(S.risk, 'Verified human');
+  log('Verified → handing off to payment', true);
+  $('chArea').innerHTML = `
+    <div class="ok" role="status"><h2>Verified. Ready to pay</h2>
+      <span>${cartCount()} eSIM${cartCount() === 1 ? '' : 's'} · total ${money(cartTotal())}</span>
+      <span>In the live site this step opens Stripe Checkout, where Radar rules and 3D Secure add the final layer. Nothing is charged in this prototype.</span>
+      <div class="btn-row"><button class="btn" type="button" id="again">Buy another plan</button></div>
+    </div>`;
+  $('again').onclick = () => { S.cart = []; home(); };
+}
+
+/* ---------------- the 8 challenges ---------------- */
+const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+function drawNoisy(canvas, text, size) {
+  const c = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const css = getComputedStyle(document.documentElement);
+  c.fillStyle = css.getPropertyValue('--surface-2').trim() || '#eee'; c.fillRect(0, 0, W, H);
+  for (let i = 0; i < 6; i++) {
+    c.strokeStyle = css.getPropertyValue('--line').trim() || '#ccc'; c.lineWidth = 1 + Math.random() * 1.5;
+    c.beginPath(); c.moveTo(rnd(W), rnd(H)); c.bezierCurveTo(rnd(W), rnd(H), rnd(W), rnd(H), rnd(W), rnd(H)); c.stroke();
+  }
+  c.fillStyle = css.getPropertyValue('--ink').trim() || '#000';
+  c.textBaseline = 'middle';
+  let x = 18;
+  [...text].forEach(ch => {
+    c.save();
+    c.font = `600 ${size + rnd(6)}px "DM Mono", Consolas, monospace`;
+    c.translate(x, H / 2 + rnd(10) - 5);
+    c.rotate((Math.random() - .5) * .5);
+    c.fillText(ch, 0, 0);
+    c.restore();
+    x += c.measureText ? size * .62 + rnd(5) : size * .6;
+  });
+}
+
+const CH = {
+  pick() {
+    const sets = [['✈️', 'planes'], ['🧳', 'suitcases'], ['🌴', 'palm trees'], ['📱', 'phones'], ['🗺️', 'maps']];
+    const [target, label] = pick(sets);
+    const others = sets.map(s => s[0]).filter(e => e !== target);
+    const nT = 2 + rnd(3);
+    const cells = shuffle([...Array(nT).fill(target), ...Array.from({ length: 9 - nT }, () => pick(others))]);
+    const sel = new Set();
+    return {
+      label: 'Pick the pictures', q: `Tap every picture of <b>${label}</b>`,
+      mount(el) {
+        el.innerHTML = `<div class="tiles">${cells.map((e, i) => `<button type="button" class="tile" data-i="${i}" aria-pressed="false" aria-label="tile ${i + 1}">${e}</button>`).join('')}</div>`;
+        el.querySelectorAll('.tile').forEach(t => t.onclick = () => {
+          const i = +t.dataset.i; sel.has(i) ? sel.delete(i) : sel.add(i);
+          t.classList.toggle('sel'); t.setAttribute('aria-pressed', sel.has(i));
+        });
+      },
+      check() { return cells.every((e, i) => (e === target) === sel.has(i)); }
+    };
+  },
+  math() {
+    const a = 2 + rnd(8), b = 1 + rnd(5), plus = Math.random() < .6;
+    const ans = plus ? a + b : a - b;
+    let cv;
+    return {
+      label: 'Simple sum', q: 'Type the answer to the sum in the picture',
+      mount(el) {
+        el.innerHTML = `<canvas class="cap" width="320" height="70" aria-label="A sum written in words"></canvas><input class="ans" id="ans" inputmode="numeric" autocomplete="off" aria-label="Answer">`;
+        cv = el.querySelector('canvas');
+        drawNoisy(cv, `${WORDS[a]} ${plus ? '+' : '-'} ${WORDS[b]}`, 20);
+        $('ans').focus();
+      },
+      check() { return parseInt($('ans').value, 10) === ans; }
+    };
+  },
+  slider() {
+    const target = 55 + rnd(30); // % position of the phone slot
+    let pos = 0, moves = 0, speeds = [], lastX = null, lastT = 0;
+    return {
+      label: 'Slide to fit', q: 'Drag the SIM 📶 into the phone slot',
+      mount(el) {
+        el.innerHTML = `<div class="track" id="trk"><div class="zone" style="left:calc(${target}% - 28px);width:56px">📱</div><button type="button" class="handle" id="hdl" aria-label="SIM handle, use arrow keys to move">📶</button></div>`;
+        const trk = $('trk'), hdl = $('hdl');
+        const place = () => { hdl.style.left = `calc(${pos}% - ${pos * .44}px)`; };
+        place();
+        const setFromX = x => {
+          const r = trk.getBoundingClientRect();
+          pos = Math.max(0, Math.min(100, (x - r.left - 22) / (r.width - 44) * 100));
+          const now = performance.now();
+          if (lastX !== null) speeds.push(Math.abs(x - lastX) / Math.max(1, now - lastT));
+          lastX = x; lastT = now; moves++; place();
+        };
+        hdl.onpointerdown = e => { hdl.setPointerCapture(e.pointerId); hdl.onpointermove = ev => setFromX(ev.clientX); };
+        hdl.onpointerup = () => { hdl.onpointermove = null; };
+        hdl.onkeydown = e => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+            e.preventDefault(); pos = Math.max(0, Math.min(100, pos + (e.key === 'ArrowRight' ? 3 : -3))); moves += 2; speeds.push(Math.random()); place();
+          }
+        };
+      },
+      check() {
+        const near = Math.abs(pos - target) <= 7;
+        // a straight, constant-speed drag is typical of scripts
+        const varied = speeds.length > 3 && (Math.max(...speeds) - Math.min(...speeds)) > 0.05;
+        return near && moves >= 5 && varied;
+      }
+    };
+  },
+  order() {
+    const nums = shuffle([...new Set(Array.from({ length: 8 }, () => 1 + rnd(98)))]).slice(0, 4);
+    const sorted = nums.slice().sort((x, y) => x - y);
+    let step = 0, bad = false;
+    return {
+      label: 'Put in order', q: 'Tap the numbers from <b>smallest to largest</b>',
+      mount(el) {
+        el.innerHTML = `<div class="tiles">${nums.map(n => `<button type="button" class="tile num" data-n="${n}">${n}</button>`).join('')}</div>`;
+        el.querySelectorAll('.tile').forEach(t => t.onclick = () => {
+          if (t.classList.contains('gone')) return;
+          if (+t.dataset.n !== sorted[step]) bad = true;
+          step++; t.classList.add('gone');
+        });
+      },
+      check() { return !bad && step === 4; }
+    };
+  },
+  odd() {
+    const groups = [['🍎', '🍌', '🍇', '🍓', '🍊', '🍐'], ['✈️', '🚆', '🚢', '🚗', '🚌', '🚲'], ['☀️', '🌧️', '❄️', '🌈', '⛅', '🌪️'], ['🐶', '🐱', '🐰', '🦊', '🐻', '🐼']];
+    const gi = rnd(groups.length);
+    let oi = rnd(groups.length); if (oi === gi) oi = (oi + 1) % groups.length;
+    const odd = pick(groups[oi]);
+    const cells = shuffle([...shuffle(groups[gi]).slice(0, 5), odd]);
+    let chosen = -1;
+    return {
+      label: 'Odd one out', q: 'Tap the one that <b>doesn’t belong</b>',
+      mount(el) {
+        el.innerHTML = `<div class="tiles six">${cells.map((e, i) => `<button type="button" class="tile" data-i="${i}">${e}</button>`).join('')}</div>`;
+        el.querySelectorAll('.tile').forEach(t => t.onclick = () => {
+          el.querySelectorAll('.tile').forEach(x => x.classList.remove('sel'));
+          t.classList.add('sel'); chosen = +t.dataset.i;
+        });
+      },
+      check() { return chosen >= 0 && cells[chosen] === odd; }
+    };
+  },
+  recall() {
+    const inCart = [...new Set(S.cart.map(l => COUNTRIES[l.ci].name))];
+    const right = pick(inCart);
+    const pool = COUNTRIES.map(c => c.name).filter(x => !inCart.includes(x));
+    const opts = shuffle([right, ...shuffle(pool).slice(0, 3)]);
+    let chosen = null;
+    return {
+      label: 'Your cart', q: 'Which of these destinations is <b>in your cart</b>?',
+      mount(el) {
+        el.innerHTML = `<div class="opts">${opts.map((o, i) => `<button type="button" class="opt" data-i="${i}">${esc(o)}</button>`).join('')}</div>`;
+        el.querySelectorAll('.opt').forEach(b => b.onclick = () => {
+          el.querySelectorAll('.opt').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); chosen = opts[+b.dataset.i];
+        });
+      },
+      check() { return chosen === right; }
+    };
+  },
+  rotate() {
+    let ang = (1 + rnd(7)) * 45;
+    return {
+      label: 'Turn the plane', q: 'Turn the plane so it points <b>straight up</b>',
+      mount(el) {
+        el.innerHTML = `<div class="rot">
+          <svg viewBox="0 0 100 100" id="pl" role="img" aria-label="Plane, rotated"><path d="M50 10 L58 42 L88 56 L88 63 L58 55 L56 78 L66 86 L66 91 L50 86 L34 91 L34 86 L44 78 L42 55 L12 63 L12 56 L42 42 Z" fill="var(--accent)"/></svg>
+          <div class="btn-row"><button type="button" class="btn ghost" id="rl" aria-label="Turn left">⟲ Left</button><button type="button" class="btn ghost" id="rr" aria-label="Turn right">Right ⟳</button></div></div>`;
+        const pl = $('pl'); const set = () => { pl.style.transform = `rotate(${ang}deg)`; }; set();
+        $('rl').onclick = () => { ang -= 45; set(); };
+        $('rr').onclick = () => { ang += 45; set(); };
+      },
+      check() { return ((ang % 360) + 360) % 360 === 0; }
+    };
+  },
+  text() {
+    const alphabet = 'ACDEFHJKMNPRTUVWXY34679';
+    const code = Array.from({ length: 5 }, () => alphabet[rnd(alphabet.length)]).join('');
+    return {
+      label: 'Read the code', q: 'Type the 5 characters you see',
+      mount(el) {
+        el.innerHTML = `<canvas class="cap" width="240" height="70" aria-label="Distorted code"></canvas><input class="ans" id="ans" autocomplete="off" maxlength="5" aria-label="Code">`;
+        drawNoisy(el.querySelector('canvas'), code, 30);
+        $('ans').focus();
+      },
+      check() { return $('ans').value.trim().toUpperCase() === code; }
+    };
+  }
+};
+const CH_LABEL = { pick: 'Pick the pictures', math: 'Simple sum', slider: 'Slide to fit', order: 'Put in order', odd: 'Odd one out', recall: 'Your cart', rotate: 'Turn the plane', text: 'Read the code' };
+$('chTypes').innerHTML = Object.keys(CH).map(k => `<label class="chk" for="ct_${k}"><input type="checkbox" id="ct_${k}" checked> ${CH_LABEL[k]}</label>`).join('');
+
+/* ---------------- bot simulations ---------------- */
+const wait = ms => new Promise(r => setTimeout(r, ms));
+async function ensureCheckout() {
+  if (S.view !== 'checkout' || !$('email') || $('email').disabled) {
+    if (!S.cart.length) { S.cart.push({ ci: rnd(COUNTRIES.length), pi: rnd(3), qty: 1 + rnd(2) }); log('Bot adds a plan to the cart'); }
+    checkout(); await wait(150);
+  }
+}
+$('simSimple').onclick = async () => {
+  log('— Simulating a simple bot —', true);
+  await ensureCheckout();
+  $('email').value = 'buyer' + rnd(99999) + '@mailinator.com';
+  $('fname').value = 'John';
+  $('hp').value = 'http://cheap-deals.example';   // bots fill every field, including hidden ones
+  await wait(300);
+  submitDetails(true);
+};
+$('simSmart').onclick = async () => {
+  log('— Simulating a smarter bot —', true);
+  await ensureCheckout();
+  $('email').value = 'traveller' + rnd(99999) + '@gmail.com';
+  $('fname').value = 'Anna';
+  await wait(1200);
+  submitDetails(true);
+  // it now meets a challenge it has never seen and has to guess
+  for (let i = 0; i < 3 && S.current && Date.now() >= S.coolUntil && $('verify'); i++) {
+    await wait(900);
+    log('Bot guesses an answer…');
+    verify(false);
+  }
+};
+$('simReset').onclick = () => { S.cart = []; S.coolUntil = 0; S.attempts = []; S.fails = 0; $('log').innerHTML = ''; log('Reset'); paintRisk(0, 'Watching'); $('sigs').innerHTML = ''; home(); };
+
+log('Page loaded · defences active');
+paintRisk(0, 'Watching');
+home();
+})();
+</script>
+</body>
+</html>
